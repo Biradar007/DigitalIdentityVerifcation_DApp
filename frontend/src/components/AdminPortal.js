@@ -4,6 +4,8 @@ const AdminPortal = ({ contract, accounts }) => {
   const [employerAddress, setEmployerAddress] = useState('');
   const [message, setMessage] = useState('');
 
+ 
+
   const registerEmployer = async () => {
     try {
       if (!employerAddress) {

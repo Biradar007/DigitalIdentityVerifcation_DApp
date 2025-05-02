@@ -7,19 +7,56 @@ const InstitutionPortal = ({ contract, accounts, handleLogout }) => {
   const [requests, setRequests] = useState([]);
   const [institutionName, setInstitutionName] = useState('');
   const [resumes, setResumes] = useState([]);
-  // const [approvedRequests, setApprovedRequests] = useState([]); // Track approved requests
+  const [error, setError] = useState(null); // Add error state
 
-  const checkInstitutionRegistration = useCallback(async () => {
+  // Add error handling and debugging for contract calls
+  const checkInstitutionRegistration = async () => {
     try {
-      const registered = await contract.methods
-        .institutions(accounts[0])
-        .call();
-      setIsRegistered(registered);
-      console.log(`Institution registration status: ${registered}`);
+      console.log('Checking institution registration for address:', accounts[0]);
+      console.log('Contract methods:', contract.methods);
+      
+      // Verify contract is properly initialized
+      if (!contract || !contract.methods) {
+        throw new Error('Contract not properly initialized');
+      }
+
+      const isRegistered = await contract.methods.institutions(accounts[0]).call();
+      console.log('Institution registration status:', isRegistered);
+      setIsRegistered(isRegistered);
+
+      if (isRegistered) {
+        const name = await contract.methods.institutionNames(accounts[0]).call();
+        console.log('Institution name:', name);
+        setInstitutionName(name);
+      }
     } catch (error) {
-      console.error('Error checking institution registration:', error.message);
+      console.error('Contract call error:', {
+        error,
+        contractAddress: contract._address,
+        account: accounts[0],
+        methods: Object.keys(contract.methods)
+      });
+      setError('Error checking institution registration. Please check console for details.');
     }
-  }, [contract, accounts]);
+  };
+
+  const fetchInstitutionDetails = async () => {
+    try {
+      // First check if institution is registered
+      const isRegistered = await contract.methods.institutions(accounts[0]).call();
+      if (!isRegistered) {
+        console.log('Institution not registered');
+        return;
+      }
+
+      // Then get the institution name
+      const name = await contract.methods.institutionNames(accounts[0]).call();
+      console.log('Institution name:', name);
+      setInstitutionName(name);
+    } catch (error) {
+      console.error('Error fetching institution details:', error);
+    }
+  };
 
   const fetchInstitutionName = useCallback(async () => {
     try {

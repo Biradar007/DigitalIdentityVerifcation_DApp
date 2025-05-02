@@ -147,44 +147,72 @@ const ApplicantPortal = ({ contract, accounts, web3, handleLogout }) => {
 
   const uploadResume = async e => {
     e.preventDefault();
-    console.log('uploadResume triggered'); // Debug log
+    console.log('uploadResume triggered');
 
     if (!resumeHash || !applicantName || !selectedEmployer) {
       alert('Please provide a resume, applicant name, and select an employer.');
       return;
     }
 
-    console.log('Parameters:', { applicantName, resumeHash, selectedEmployer });
-
     try {
-      const txReceipt = await contract.methods
-        .uploadResume(applicantName, resumeHash, selectedEmployer) // Pass employer name
+      setUploading(true);
+      console.log('Parameters:', { applicantName, resumeHash, selectedEmployer });
+
+      // Call the smart contract method
+      const tx = await contract.methods
+        .uploadResume(applicantName, resumeHash, selectedEmployer)
         .send({ from: accounts[0] });
 
-      console.log('Transaction Receipt:', txReceipt);
+      console.log('Full Transaction Receipt:', tx);
 
-      const nftMintedEvent = txReceipt.events.NFTMinted;
-      if (nftMintedEvent) {
-        const { tokenId, applicant } = nftMintedEvent.returnValues;
-        console.log('NFT Minted Event:', { tokenId, applicant });
+      // Check for events in different ways
+      if (tx.events) {
+        console.log('All Events:', tx.events);
+        
+        // Try different ways to access the event
+        const nftEvent = tx.events.NFTMinted || 
+                        tx.events.find(e => e.event === 'NFTMinted') ||
+                        Object.values(tx.events).find(e => e.event === 'NFTMinted');
 
-        if (applicant.toLowerCase() === accounts[0].toLowerCase()) {
+        if (nftEvent) {
+          const tokenId = nftEvent.returnValues.tokenId;
+          const applicant = nftEvent.returnValues.applicant;
+          console.log('NFT Event Found:', { tokenId, applicant });
+
+          if (applicant.toLowerCase() === accounts[0].toLowerCase()) {
+            const newNFT = {
+              tokenId: parseInt(tokenId, 10),
+              employerName: selectedEmployer,
+            };
+            setNFTs(prevNFTs => [...prevNFTs, newNFT]);
+            await fetchVerificationStatus([newNFT]);
+            alert(`NFT Minted Successfully! Token ID: ${tokenId}`);
+          }
+        } else {
+          // If no event found, try to get the token ID another way
+          const tokenId = await contract.methods.tokenCounter().call();
+          const newTokenId = parseInt(tokenId, 10) - 1; // Last minted token
+          
           const newNFT = {
-            tokenId: parseInt(tokenId, 10),
+            tokenId: newTokenId,
             employerName: selectedEmployer,
           };
           setNFTs(prevNFTs => [...prevNFTs, newNFT]);
-          alert(`NFT Minted with Token ID: ${tokenId}`);
-        } else {
-          console.warn('NFT minted for a different account:', applicant);
+          await fetchVerificationStatus([newNFT]);
+          alert(`NFT Minted Successfully! Token ID: ${newTokenId}`);
         }
-        setSelectedEmployer(''); // Close the Apply Form
-      } else {
-        console.error('No NFTMinted event found in transaction receipt.');
       }
+
+      // Reset form
+      setApplicantName('');
+      setResumeHash('');
+      setSelectedEmployer('');
+      
     } catch (error) {
-      console.error('Blockchain Error:', error.message);
-      alert('Failed to upload resume to the blockchain.');
+      console.error('Error uploading resume:', error);
+      alert(`Failed to upload resume: ${error.message}`);
+    } finally {
+      setUploading(false);
     }
   };
 

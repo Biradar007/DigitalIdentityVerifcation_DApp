@@ -6,12 +6,12 @@ import './AuthPage.css';
 const AuthPage = ({ setUserRole, contract, accounts }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('applicant'); // Default role
+  const [role, setRole] = useState('applicant');
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleAuth = async e => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     const endpoint = isRegister
       ? 'http://localhost:5001/api/register'
@@ -22,18 +22,11 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
     try {
       const payload = { username, password, role };
 
-      // Include Ethereum address during registration for employer or institution
       if (isRegister && (role === 'employer' || role === 'institution')) {
-        console.log('Accounts:', accounts);
-
         if (!accounts || accounts.length === 0) {
-          alert('No Ethereum account found. Please connect your wallet.');
-          setLoading(false);
-          return;
+          throw new Error('No Ethereum account found. Please connect your wallet.');
         }
-
         payload.address = accounts[0];
-        payload.name = username;
       }
 
       const response = await axios.post(endpoint, payload);
@@ -44,17 +37,13 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
           try {
             const methodName =
               role === 'employer' ? 'registerEmployer' : 'registerInstitution';
-
-            console.log(
-              `Registering ${role} on the blockchain: ${accounts[0]}`,
-            );
+            console.log(`Registering ${role} on the blockchain: ${accounts[0]}`);
             let receipt;
 
             if (role === 'institution') {
-              receipt = await contract.methods[methodName](
-                accounts[0],
-                username,
-              ).send({ from: accounts[0] });
+              receipt = await contract.methods[methodName](accounts[0], username).send({
+                from: accounts[0],
+              });
             } else {
               receipt = await contract.methods[methodName](accounts[0]).send({
                 from: accounts[0],
@@ -62,33 +51,14 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
             }
 
             if (receipt.status) {
-              console.log(
-                `${
-                  role.charAt(0).toUpperCase() + role.slice(1)
-                } registered on the blockchain successfully.`,
-              );
-              alert(
-                `${
-                  role.charAt(0).toUpperCase() + role.slice(1)
-                } registration completed successfully.`,
-              );
+              console.log(`${role.charAt(0).toUpperCase() + role.slice(1)} registered on the blockchain successfully.`);
+              alert(`${role.charAt(0).toUpperCase() + role.slice(1)} registration completed successfully.`);
             } else {
-              alert(
-                `${
-                  role.charAt(0).toUpperCase() + role.slice(1)
-                } registration failed on the blockchain.`,
-              );
+              throw new Error(`${role.charAt(0).toUpperCase() + role.slice(1)} registration failed on the blockchain.`);
             }
           } catch (err) {
-            console.error(
-              `Blockchain registration failed for ${role}:`,
-              err.message,
-            );
-            alert(
-              `${
-                role.charAt(0).toUpperCase() + role.slice(1)
-              } registration failed on the blockchain.`,
-            );
+            console.error(`Blockchain registration failed for ${role}:`, err.message);
+            throw new Error(`${role.charAt(0).toUpperCase() + role.slice(1)} registration failed on the blockchain.`);
           }
         }
 
@@ -96,19 +66,18 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
         setIsRegister(false);
         setUsername('');
         setPassword('');
-        return; // Stop further execution for registration
+        return;
       }
 
       if (response.data.role) {
-        // Login flow
         setUserRole(response.data.role);
-        navigate(`/${response.data.role}`); // Redirect to the appropriate role page
+        navigate(`/${response.data.role}`);
       } else {
-        alert('Authentication failed!'); // Fallback for unexpected scenarios
+        throw new Error('Authentication failed: No role returned');
       }
     } catch (error) {
       console.error('Error:', error.response?.data || error.message);
-      alert('Authentication failed!');
+      alert(`Authentication failed: ${error.response?.data?.message || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -123,7 +92,7 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
           className="username"
           placeholder="Username"
           value={username}
-          onChange={e => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value)}
           required
         />
         <input
@@ -131,13 +100,15 @@ const AuthPage = ({ setUserRole, contract, accounts }) => {
           className="password"
           placeholder="Password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <select value={role} onChange={e => setRole(e.target.value)}>
+        <select value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="applicant">Applicant</option>
           <option value="employer">Employer</option>
           <option value="institution">Institution</option>
+          <option value="admin">admin</option>
+
         </select>
         <button type="submit" disabled={loading}>
           {loading ? 'Processing...' : isRegister ? 'Register' : 'Login'}

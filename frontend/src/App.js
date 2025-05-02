@@ -5,8 +5,7 @@ import {
   Route,
   Navigate,
 } from 'react-router-dom';
-import Web3 from '../node_modules/web3/lib/types';
-// import IdentityVerification from './contracts/getContract';
+import Web3 from 'web3';
 import contractData from './contract.json';
 import AuthPage from './components/AuthPage';
 import ApplicantPortal from './components/ApplicantPortal';
@@ -26,44 +25,64 @@ const App = () => {
       let web3Instance;
       if (window.ethereum) {
         web3Instance = new Web3(window.ethereum);
-        await window.ethereum.enable();
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
       } else if (window.web3) {
         web3Instance = new Web3(window.web3.currentProvider);
       } else {
         alert('Non-Ethereum browser detected. Please install MetaMask!');
         return;
       }
+
       setWeb3(web3Instance);
 
       const accountsList = await web3Instance.eth.getAccounts();
       setAccounts(accountsList);
 
-      const networkId = await web3Instance.eth.net.getId();
-      const deployedNetwork = contractData.networks[networkId];
-
-      if (deployedNetwork) {
-        const contractInstance = new web3Instance.eth.Contract(
-          contractData.abi,
-          deployedNetwork.address,
-        );
-        setContract(contractInstance);
-        console.log('Contract initialized:', contractInstance);
-      } else {
-        alert('Smart contract not deployed to the current network.');
-      }
+      const contractInstance = await initContract(web3Instance);
+      setContract(contractInstance);
     } catch (error) {
       console.error('Error initializing blockchain data:', error.message);
+      alert('Error initializing blockchain data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const initContract = async (web3Instance) => {
+    try {
+      const networkId = await web3Instance.eth.net.getId();
+      const deployedNetwork = contractData.networks[networkId];
+      
+      if (!deployedNetwork) {
+        throw new Error(`Contract not deployed on network ${networkId}`);
+      }
+
+      const instance = new web3Instance.eth.Contract(
+        contractData.abi,
+        deployedNetwork.address
+      );
+      
+      console.log('Contract initialized:', {
+        address: deployedNetwork.address,
+        networkId,
+        methods: Object.keys(instance.methods)
+      });
+      
+      return instance;
+    } catch (error) {
+      console.error('Contract initialization error:', error);
+      throw error;
+    }
+  };
+
   const handleLogout = () => {
     setUserRole(null);
+    setAccounts([]);
+    setContract(null);
     alert('You have been logged out.');
   };
 
-  const handleAccountChange = accounts => {
+  const handleAccountChange = (accounts) => {
     if (accounts.length === 0) {
       alert('Please connect to MetaMask.');
     } else {
@@ -92,15 +111,20 @@ const App = () => {
   }, []);
 
   if (loading) {
-    return <p>Loading Blockchain Data...</p>;
+    return (
+      <div>
+        <p>Loading Blockchain Data...</p>
+        <div className="spinner"></div> {/* You can add a spinner here */}
+      </div>
+    );
   }
 
   if (!web3 || !contract) {
     return (
       <div>
         <p>
-          Error connecting to blockchain. Please ensure MetaMask is connected
-          and try again.
+          Error connecting to blockchain. Please ensure MetaMask is connected,
+          and the contract is deployed to the correct network.
         </p>
       </div>
     );
@@ -128,7 +152,7 @@ const App = () => {
                 contract={contract}
                 accounts={accounts}
                 web3={web3}
-                handleLogout={handleLogout} // Pass logout
+                handleLogout={handleLogout}
               />
             ) : (
               <Navigate to="/" />
@@ -143,7 +167,7 @@ const App = () => {
                 contract={contract}
                 accounts={accounts}
                 web3={web3}
-                handleLogout={handleLogout} // Pass logout
+                handleLogout={handleLogout}
               />
             ) : (
               <Navigate to="/" />
@@ -158,7 +182,7 @@ const App = () => {
                 contract={contract}
                 accounts={accounts}
                 web3={web3}
-                handleLogout={handleLogout} // Pass logout
+                handleLogout={handleLogout}
               />
             ) : (
               <Navigate to="/" />
@@ -173,10 +197,10 @@ const App = () => {
                 contract={contract}
                 accounts={accounts}
                 web3={web3}
-                handleLogout={handleLogout} // Pass logout
+                handleLogout={handleLogout}
               />
             ) : (
-              <Navigate to="/" />
+              <Navigate to="/admin" />
             )
           }
         />

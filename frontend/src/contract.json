@@ -299,7 +299,7 @@
       "outputs": [
         {
           "name": "",
-          "type": "bool"
+                   "type": "bool"
         }
       ],
       "payable": false,
@@ -1036,7 +1036,75 @@
   ],
   "networks": {
     "5777": {
-      "address": "0xE35514c68d31E8532850649d7d8297799BA6f4d2"
+      "address": "0xF9baE0C51Eb4B19F94BaA452EaB98f9F8891843f"
+    }
+  },
+  "InstitutionPortal": {
+    "component": {
+      "import": [
+        "React",
+        "useState",
+        "useEffect",
+        "useCallback"
+      ],
+      "props": [
+        "contract",
+        "accounts",
+        "handleLogout"
+      ],
+      "state": [
+        {
+          "name": "isRegistered",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "institutionName",
+          "type": "string",
+          "default": ""
+        }
+      ],
+      "methods": [
+        {
+          "name": "checkInstitutionRegistration",
+          "type": "useCallback",
+          "dependencies": [
+            "contract",
+            "accounts"
+          ],
+          "implementation": "async () => {\n    try {\n      console.log('Checking institution registration for address:', accounts[0]);\n      console.log('Contract methods:', contract.methods);\n      \n      if (!contract || !contract.methods) {\n        throw new Error('Contract not properly initialized');\n      }\n\n      const registered = await contract.methods.institutions(accounts[0]).call();\n      console.log('Institution registration status:', registered);\n      setIsRegistered(registered);\n\n      if (registered) {\n        const name = await contract.methods.getInstitutionName(accounts[0]).call();\n        console.log('Institution name:', name);\n        setInstitutionName(name);\n      }\n    } catch (error) {\n      console.error('Contract call error:', error);\n    }\n  }"
+        }
+      ],
+      "effects": [
+        {
+          "name": "useEffect",
+          "dependencies": [
+            "checkInstitutionRegistration"
+          ],
+          "implementation": "checkInstitutionRegistration();"
+        }
+      ],
+      "ui": {
+        "elements": [
+          {
+            "type": "conditional",
+            "condition": "isRegistered",
+            "true": {
+              "type": "text",
+              "content": "Your institution is registered as: {institutionName}"
+            },
+            "false": {
+              "type": "text",
+              "content": "You are not a registered institution."
+            }
+          },
+          {
+            "type": "button",
+            "action": "handleLogout",
+            "label": "Logout"
+          }
+        ]
+      }
     }
   }
 }

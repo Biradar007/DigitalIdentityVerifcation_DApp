@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.4.25;
+pragma solidity ^0.8.20;
 
-import "openzeppelin-solidity/contracts/token/ERC721/ERC721Full.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract DigitalIdentityVerification is ERC721Full, Ownable {
+contract DigitalIdentityVerification is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     struct Resume {
         string applicantName;
         string resumeHash;
@@ -19,16 +21,19 @@ contract DigitalIdentityVerification is ERC721Full, Ownable {
 
     mapping(address => Resume) public resumes;
     mapping(address => bool) public employers;
-    mapping(address => bool) public institutions; // New: Tracks registered institutions
+
+    // Public mappings for institutions
+    mapping(address => bool) public institutions;
+    mapping(address => string) public institutionNames;
+
     mapping(uint256 => InstitutionRequest) public institutionRequests;
     mapping(uint256 => bool) public employerVerified;
-    mapping(address => string) public institutionNames;
     mapping(uint256 => bool) public institutionVerified;
 
     uint256 public tokenCounter;
 
     event EmployerRegistered(address indexed employer);
-    event InstitutionRegistered(address indexed institution); // New event
+    event InstitutionRegistered(address indexed institution);
     event ResumeUploaded(address indexed applicant, string resumeHash);
     event NFTMinted(address indexed applicant, uint256 tokenId, string employerName);
     event InstitutionVerificationRequested(uint256 tokenId, string institutionName, address indexed employer, string employerName);
@@ -37,7 +42,7 @@ contract DigitalIdentityVerification is ERC721Full, Ownable {
     event InstitutionApprovalUpdated(uint256 tokenId, address institution);
     event EmployerApprovalUpdated(uint256 tokenId, address employer);
 
-    constructor() ERC721Full("Digital Identity Verification NFT", "DIVNFT") public {
+    constructor(address initialOwner) ERC721("Digital Identity Verification NFT", "DIVNFT") Ownable(initialOwner) {
         tokenCounter = 0;
     }
 
@@ -48,20 +53,20 @@ contract DigitalIdentityVerification is ERC721Full, Ownable {
         emit EmployerRegistered(employer);
     }
 
-    // Register an institution
+    // Function to register institution
     function registerInstitution(address institution, string memory name) public onlyOwner {
-    require(institution != address(0), "Invalid institution address");
-    require(bytes(name).length > 0, "Institution name is required");
-    institutions[institution] = true;
-    institutionNames[institution] = name; // Store the name
-    emit InstitutionRegistered(institution);
-}
+        require(institution != address(0), "Invalid institution address");
+        require(bytes(name).length > 0, "Institution name is required");
+        institutions[institution] = true;
+        institutionNames[institution] = name;
+        emit InstitutionRegistered(institution);
+    }
 
-
+    // Function to get institution name
     function getInstitutionName(address institution) public view returns (string memory) {
-    require(institutions[institution], "Institution not registered");
-    return institutionNames[institution];
-}
+        require(institutions[institution], "Institution not registered");
+        return institutionNames[institution];
+    }
 
     // Upload a resume
     function uploadResume(
@@ -83,43 +88,43 @@ contract DigitalIdentityVerification is ERC721Full, Ownable {
     }
 
     // Request institution verification
-   function requestVerificationByInstitution(uint256 tokenId, string memory institutionName, string memory employerName) public {
-    require(employers[msg.sender], "Caller is not a registered employer");
-    require(_exists(tokenId), "Token ID does not exist");
-    require(bytes(institutionName).length > 0, "Institution name is required");
-    require(bytes(employerName).length > 0, "Employer name is required");
+    function requestVerificationByInstitution(uint256 tokenId, string memory institutionName, string memory employerName) public {
+        require(employers[msg.sender], "Caller is not a registered employer");
+        require(_ownerOf(tokenId) != address(0), "Token ID does not exist");
+        require(bytes(institutionName).length > 0, "Institution name is required");
+        require(bytes(employerName).length > 0, "Employer name is required");
 
-    institutionRequests[tokenId] = InstitutionRequest({
-        tokenId: tokenId,
-        institutionName: institutionName,
-        requested: true
-    });
+        institutionRequests[tokenId] = InstitutionRequest({
+            tokenId: tokenId,
+            institutionName: institutionName,
+            requested: true
+        });
 
-    emit InstitutionVerificationRequested(tokenId, institutionName, msg.sender, employerName);
-}
+        emit InstitutionVerificationRequested(tokenId, institutionName, msg.sender, employerName);
+    }
 
     // Verify a resume by an institution
     function verifyByInstitution(uint256 tokenId) public {
-    require(_exists(tokenId), "Invalid tokenId");
-    require(institutions[msg.sender], "Caller is not a registered institution");
-    require(institutionRequests[tokenId].requested, "No verification request exists");
-    require(bytes(institutionRequests[tokenId].institutionName).length > 0, "Invalid institution name");
+        require(_ownerOf(tokenId) != address(0), "Invalid tokenId");
+        require(institutions[msg.sender], "Caller is not a registered institution");
+        require(institutionRequests[tokenId].requested, "No verification request exists");
+        require(bytes(institutionRequests[tokenId].institutionName).length > 0, "Invalid institution name");
 
-    institutionVerified[tokenId] = true;
-    emit ResumeVerifiedByInstitution(tokenId, msg.sender);
-    emit InstitutionApprovalUpdated(tokenId, msg.sender); // New event
-}
+        institutionVerified[tokenId] = true;
+        emit ResumeVerifiedByInstitution(tokenId, msg.sender);
+        emit InstitutionApprovalUpdated(tokenId, msg.sender);
+    }
 
     // Verify a resume by an employer
     function verifyByEmployer(uint256 tokenId) public {
-    require(employers[msg.sender], "Caller is not a registered employer");
-    require(_exists(tokenId), "Invalid tokenId");
-    require(institutionVerified[tokenId], "Resume must be verified by an institution first");
+        require(employers[msg.sender], "Caller is not a registered employer");
+        require(_ownerOf(tokenId) != address(0), "Invalid tokenId");
+        require(institutionVerified[tokenId], "Resume must be verified by an institution first");
 
-    employerVerified[tokenId] = true;
-    emit ResumeVerifiedByEmployer(tokenId, msg.sender);
-    emit EmployerApprovalUpdated(tokenId, msg.sender); // New event
-}
+        employerVerified[tokenId] = true;
+        emit ResumeVerifiedByEmployer(tokenId, msg.sender);
+        emit EmployerApprovalUpdated(tokenId, msg.sender);
+    }
 
     // Get resume details by address
     function getResume(address applicant)
@@ -146,4 +151,39 @@ contract DigitalIdentityVerification is ERC721Full, Ownable {
         InstitutionRequest memory request = institutionRequests[tokenId];
         return (request.institutionName, request.requested);
     }
+
+    // Override required functions
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable)
+        returns (address)
+    {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable, ERC721URIStorage)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721, ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
 }
+
